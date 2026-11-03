@@ -240,7 +240,8 @@ export function amostraFormScreen(talhaoId: string | null, amostraId: string | n
     title: existente ? 'Editar amostra' : 'Nova amostra', back: existente ? `#/amostra/${existente.id}` : `#/talhao/${t.id}`,
     html: `<form class="stack" novalidate>
       <div class="card form-card">
-        <div class="eyebrow">${esc(t.name)} · ${esc(STAGE_LABEL[t.stage])}</div>
+        <div class="eyebrow">${esc(t.name)} · ${esc(STAGE_LABEL[s.stage])}</div>
+        ${s.stage !== t.stage ? `<p class="note warn">Esta amostra foi salva como ${esc(stageShort(s.stage))}; o talhão hoje está em ${esc(stageShort(t.stage))}. Salvar mantém o estágio da amostra.</p>` : ''}
         <div class="row2">
           <label class="field"><span class="field-label">Data da coleta</span><span class="field-box"><input type="date" name="date" value="${esc(toDateInput(s.dateMillis))}" required></span></label>
           ${textField('sampleNumber', 'Nº do laudo (opcional)', s.sampleNumber)}
@@ -283,8 +284,17 @@ export function amostraScreen(id: string): Screen {
   const t = a.talhaoId ? talhaoById(a.talhaoId) : undefined
   return {
     title: 'Recomendação', back: t ? `#/talhao/${t.id}` : '#/',
-    html: `<div class="actions-row"><a class="btn text" href="#/amostra/${esc(id)}/editar">Editar laudo</a></div><div data-rec></div>`,
+    html: `${t && (a.stage !== t.stage || a.rowSpacing !== t.rowSpacing || a.plantSpacing !== t.plantSpacing || (t.stage === 'PRODUCTION' && a.expectedYield !== t.expectedYield)) ? `
+      <p class="note warn">Esta recomendação usa o manejo gravado na amostra (${esc(stageShort(a.stage))}, ${g(a.rowSpacing, 1)} × ${g(a.plantSpacing, 1)} m${a.stage === 'PRODUCTION' ? `, ${g(a.expectedYield, 0)} sc/ha` : ''}), diferente do talhão hoje (${esc(stageShort(t.stage))}, ${g(t.rowSpacing, 1)} × ${g(t.plantSpacing, 1)} m${t.stage === 'PRODUCTION' ? `, ${g(t.expectedYield, 0)} sc/ha` : ''}).
+        <button class="btn text" data-act="sync">Usar o manejo do talhão</button></p>` : ''}
+      <div class="actions-row"><a class="btn text" href="#/amostra/${esc(id)}/editar">Editar laudo</a></div><div data-rec></div>`,
     mount(root) {
+      root.querySelector('[data-act="sync"]')?.addEventListener('click', () => {
+        if (!t) return
+        saveAmostra({ ...a, ...contextoDoTalhao(t) })
+        toast('Amostra atualizada com o manejo do talhão.')
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
       renderRecommendation(root.querySelector('[data-rec]') as HTMLElement, a, { prefsId: a.id, areaHa: t?.areaHa ?? null, title: t?.name })
     },
   }

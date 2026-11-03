@@ -2,10 +2,10 @@
 import { type ChosenProduct, LIME_APPLICATION_LABEL, type LimeApplication, limeApplicationDefaultFor, microSymbol } from '../domain/calculator'
 import { defaultSelection, sortInsumos, toChosenProducts } from '../domain/insumos'
 import { microInfo } from '../domain/microGuide'
-import { STAGE_LABEL, STATUS_LABEL, type NutritionalStatus, type SoilSample, isFormation } from '../domain/model'
+import { STAGE_LABEL, STATUS_LABEL, type NutritionalStatus, type SoilSample, isFormation, isPlanting } from '../domain/model'
 import { type Recommendation, recommend } from '../domain/recommendation'
 import { buildShoppingList } from '../domain/shopping'
-import { P_CLASS_LABEL } from '../domain/tables'
+import { P_CLASS_LABEL, plantingPhosphorusClass } from '../domain/tables'
 import { projectYield } from '../domain/yieldProjection'
 import { type RecPrefs, data, defaultRecPrefs, prefsFor, savePrefs } from '../store'
 import { dateBR, esc, fieldValue, g, money, parseNum, toast } from './dom'
@@ -47,7 +47,13 @@ export function renderRecommendation(root: HTMLElement, sample: SoilSample, o: R
   const insumos = sortInsumos(data.insumos)
   const base = { vDesired: prefs.vDesired, prnt: prefs.prnt, useOrganicMatterCredit: prefs.useOm, limeApplication: prefs.limeApplication ?? undefined }
   const semAdubo = recommend(sample, base)
-  const selection = prefs.selection ?? defaultSelection(insumos, semAdubo)
+  // A escolha gravada vale só para os alvos que o produtor mexeu; um nutriente que passou a ser
+  // necessário (laudo editado) ganha a fonte padrão em vez de ficar sem adubo. "" = nenhum, de propósito.
+  const selection: Record<string, string> = { ...defaultSelection(insumos, semAdubo) }
+  for (const [k, v] of Object.entries(prefs.selection ?? {})) {
+    if (v === '') delete selection[k]
+    else if (insumos.some((i) => i.id === v)) selection[k] = v
+  }
   const chosen: ChosenProduct[] = toChosenProducts(selection, insumos)
   const rec = recommend(sample, { ...base, chosenProducts: chosen })
   const area = o.areaHa ?? 1
@@ -86,7 +92,9 @@ export function renderRecommendation(root: HTMLElement, sample: SoilSample, o: R
         <tr><th>K₂O</th><td>${g(npk.k2oGramsPerPlant, 1)}</td><td>${g(npk.k2oGramsPerPlantPerSplit, 1)}</td><td>${g(npk.k2oKgPerHa, 0)}</td></tr>
       </tbody>
     </table>
-    <p class="muted small">Fósforo no laudo: ${esc(P_CLASS_LABEL[npk.phosphorusClass])}${sample.pRem <= 0 ? ' (P-rem não informado: assumido 25 mg/L)' : ''}.
+    <p class="muted small">Fósforo no laudo: ${esc(isPlanting(rec.sample.stage)
+      ? P_CLASS_LABEL[plantingPhosphorusClass(sample.pMehlich, sample.pRem)] + ' (classes da Tabela 5, de plantio)'
+      : P_CLASS_LABEL[npk.phosphorusClass])}${sample.pRem <= 0 ? ' (P-rem não informado: assumido 25 mg/L)' : ''}.
       ${formation ? 'Formação: 3 aplicações de N e K₂O no período chuvoso, uma por mês.' : 'N e K₂O parcelados de outubro a março (florada, chumbinho e granação); P₂O₅ em dose única no início das chuvas.'}</p>
     ${npk.p2o5Note ? `<p class="note warn">${esc(npk.p2o5Note)}</p>` : ''}
     ${!formation && sample.organicMatter > 0 ? `
@@ -157,7 +165,9 @@ export function renderRecommendation(root: HTMLElement, sample: SoilSample, o: R
     ${rec.micronutrients.length === 0 ? '<p class="muted">Nenhum micronutriente informado no laudo.</p>' : rec.micronutrients.map((m) => {
       const info = microInfo(m.nutrient)
       const dose = m.recKgHa !== null && m.recKgHa > 0
-        ? `<b>${g(m.recKgHa, 1)} kg/ha</b>${m.recGramsPerPlant !== null ? ` · ${g(m.recGramsPerPlant, 2)} g/planta` : ''}` : ''
+        ? (isPlanting(rec.sample.stage)
+          ? `<b>${g(m.recGramsPerPlant ?? 0, 1)} g por cova</b> · ${g(m.recKgHa, 1)} kg/ha no total das covas`
+          : `<b>${g(m.recKgHa, 1)} kg/ha</b>${m.recGramsPerPlant !== null ? ` · ${g(m.recGramsPerPlant, 2)} g/planta` : ''}`) : ''
       return `<div class="micro">
         <div class="kv"><span>${esc(m.nutrient)} <span class="muted small">${g(m.value, 2)} mg/dm³</span></span>${chip(m.status)}</div>
         ${dose ? `<div class="small">${dose}</div>` : ''}
@@ -215,10 +225,7 @@ export function renderRecommendation(root: HTMLElement, sample: SoilSample, o: R
     persist({ ...prefs, limeApplication: (e.target as HTMLSelectElement).value as LimeApplication }))
   root.querySelectorAll<HTMLSelectElement>('select[data-target]').forEach((s) =>
     s.addEventListener('change', () => {
-      const next = { ...selection }
-      if (s.value) next[s.dataset.target as string] = s.value
-      else delete next[s.dataset.target as string]
-      persist({ ...prefs, selection: next })
+      persist({ ...prefs, selection: { ...(prefs.selection ?? {}), [s.dataset.target as string]: s.value } })
     }))
   root.querySelector('[data-act="print"]')?.addEventListener('click', () => window.print())
   root.querySelector('[data-act="share"]')?.addEventListener('click', async () => {
