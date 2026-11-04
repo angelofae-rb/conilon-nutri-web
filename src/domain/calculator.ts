@@ -85,7 +85,11 @@ export interface AppliedProduct {
   name: string; kgPerHa: number; gramsPerPlant: number; gramsPerPlantPerSplit: number | null
   mainNutrient: string; bagWeightKg: number; bagPrice: number
 }
-export interface CommercialFertilizerResult { products: AppliedProduct[] }
+/** `remaining`: kg/ha que ainda faltam depois dos adubos escolhidos, só do que a recomendação pede. */
+export interface CommercialFertilizerResult { products: AppliedProduct[]; remaining: Record<string, number> }
+
+/** Abaixo disto (kg/ha) a sobra é arredondamento, não falta. */
+export const REMAINING_MIN_KG_HA = 0.05
 
 /** [nome, garantias (%) + bagWeightKg/pricePerBag, alvo] — mesmo formato do Kotlin. */
 export type ChosenProduct = [string, Record<string, number>, string]
@@ -648,6 +652,7 @@ export function calculateCommercialDoses(
     }
     return count >= 2
   }
+  const initialNeeds = new Map(needs)
   const targetsOrder = ['P', 'B', 'ZN', 'CU', 'MN', 'FE', 'K', 'S', 'N']
     .map((t) => ({ t, k: fornecePlural(t) ? 0 : 1 }))
     .sort((a, b) => a.k - b.k)
@@ -668,12 +673,18 @@ export function calculateCommercialDoses(
       }
       applied.push({
         name, kgPerHa: kgHa, gramsPerPlant: gPlant,
-        gramsPerPlantPerSplit: MICRO_TARGETS.has(target) ? null : gPlant / splits,
+        // Só parcela o adubo que leva N ou K; P, micros e fonte pura de S (gesso) vão em dose única.
+        gramsPerPlantPerSplit: !MICRO_TARGETS.has(target) && ((nutrients['N'] ?? 0) > 0 || (nutrients['K2O'] ?? 0) > 0)
+          ? gPlant / splits : null,
         mainNutrient: target,
         bagWeightKg: nutrients['bagWeightKg'] ?? 50.0,
         bagPrice: nutrients['pricePerBag'] ?? 0.0,
       })
     }
   }
-  return { products: applied }
+  const remaining: Record<string, number> = {}
+  for (const [k, falta] of needs) {
+    if ((initialNeeds.get(k) ?? 0) > 0 && falta > REMAINING_MIN_KG_HA) remaining[k] = falta
+  }
+  return { products: applied, remaining }
 }

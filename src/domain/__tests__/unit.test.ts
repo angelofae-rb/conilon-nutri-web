@@ -28,6 +28,9 @@ describe('escolha inicial de adubos (como o Android)', () => {
     expect(nome(sel.S)).toBe('Gesso Agrícola')
     expect(nome(sel.ZN)).toBe('FTE BR 12')
     expect(sel.B).toBeUndefined() // B 0,8 é adequado
+    // B baixo: o FTE é fonte de zinco, não de boro; sem fonte própria de boro, o B fica para a tela avisar.
+    const s2 = { ...s, b: 0.1 }
+    expect(defaultSelection(insumos, recommend(s2)).B).toBeUndefined()
     expect(toChosenProducts(sel, insumos).map((c) => c[2]).slice(0, 3)).toEqual(['P', 'K', 'N'])
   })
 })

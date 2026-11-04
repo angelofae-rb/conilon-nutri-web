@@ -1,7 +1,7 @@
 {
   "name": "conilon-nutri-web",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "ConilonNutri para iPhone e navegador: recomendação de calagem e adubação do café conilon (Incaper 2019).",
   "scripts": {

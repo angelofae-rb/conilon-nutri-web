@@ -110,12 +110,14 @@ export function renderRecommendation(root: HTMLElement, sample: SoilSample, o: R
     <div class="source-list">
       ${targetsNeeded(semAdubo).map((t) => sourceSelect(t, selection[t] ?? '', insumos)).join('')}
     </div>`}
+    ${rec.commercial.products.length ? '' : remainingNote(rec)}
     ${rec.commercial.products.length ? `
     <table class="table products">
       <thead><tr><th>Adubo</th><th>kg/ha</th><th>g/planta</th><th>por aplicação</th></tr></thead>
       <tbody>${rec.commercial.products.map((p) => `<tr><th>${esc(p.name)} <span class="muted small">${esc(p.mainNutrient === 'P' ? 'P₂O₅' : p.mainNutrient === 'K' ? 'K₂O' : p.mainNutrient)}</span></th>
         <td>${g(p.kgPerHa, 0)}</td><td>${g(p.gramsPerPlant, 1)}</td><td>${p.gramsPerPlantPerSplit !== null ? g(p.gramsPerPlantPerSplit, 1) : 'única'}</td></tr>`).join('')}</tbody>
     </table>
+    ${remainingNote(rec)}
     <div class="shopping">
       <div class="shopping-head"><b>Para ${g(area, 2)} ha</b>${o.areaHa === null ? ' <span class="muted small">(cálculo rápido: 1 ha)</span>' : ''}</div>
       ${shopping.items.map((i) => `<div class="shop-row"><span>${esc(i.productName)}</span><span>${g(i.totalKg, 0)} kg · <b>${i.bags} ${i.bags === 1 ? 'saco' : 'sacos'}</b> de ${g(i.bagWeightKg, 0)} kg${i.subtotal > 0 ? ' · ' + money(i.subtotal) : ''}</span></div>`).join('')}
@@ -235,6 +237,14 @@ export function renderRecommendation(root: HTMLElement, sample: SoilSample, o: R
     } catch { return }
     try { await navigator.clipboard.writeText(text); toast('Texto copiado.') } catch { toast('Não foi possível compartilhar.') }
   })
+}
+
+const NOME: Record<string, string> = { P: 'P₂O₅', K: 'K₂O', ZN: 'Zn', CU: 'Cu', MN: 'Mn', FE: 'Fe' }
+/** O que os adubos escolhidos não cobrem (alvo sem fonte, ou bônus de formulado que não basta). */
+function remainingNote(rec: Recommendation): string {
+  const f = Object.entries(rec.commercial.remaining)
+  if (!f.length) return ''
+  return `<p class="note warn">Ainda falta: ${f.map(([k, v]) => `${esc(NOME[k] ?? k)} ${g(v, 1)} kg/ha`).join(' · ')}. Escolha uma fonte acima.</p>`
 }
 
 function doseTile(label: string, value: string, sub = ''): string {

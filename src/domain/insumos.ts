@@ -51,6 +51,11 @@ export function concentration(i: Insumo, symbol: string): number {
   }
 }
 
+/** O micronutriente de maior garantia no insumo ("ZN" no FTE BR 12); null se não tem micro. */
+export function mainMicro(i: Insumo): string | null {
+  return maxBy(['B', 'ZN', 'CU', 'MN', 'FE'].filter((s) => concentration(i, s) > 0), (s) => concentration(i, s)) ?? null
+}
+
 export function toNutrientMap(i: Insumo): Record<string, number> {
   return {
     N: i.n, P2O5: i.p2o5, K2O: i.k2o, S: i.s, Ca: i.ca, Mg: i.mg,
@@ -80,9 +85,11 @@ export function defaultSelection(insumosIn: Insumo[], rec: Recommendation): Insu
       maxBy(insumos.filter((i) => i.s > 0), (i) => i.s)
     if (s) sel.S = s.id
   }
+  // Um adubo com vários micros (FTE) só é fonte do micro que ele mais traz (FTE BR 12 = zinco);
+  // os outros recebem o bônus dele e, se ainda faltar, a tela mostra o que falta.
   for (const m of rec.micronutrients.filter((x) => (x.recKgHa ?? 0) > 0)) {
     const sym = microSymbol(m)
-    const best = maxBy(insumos.filter((i) => concentration(i, sym) > 0), (i) => concentration(i, sym))
+    const best = maxBy(insumos.filter((i) => concentration(i, sym) > 0 && mainMicro(i) === sym), (i) => concentration(i, sym))
     if (best) sel[sym] = best.id
   }
   return sel
